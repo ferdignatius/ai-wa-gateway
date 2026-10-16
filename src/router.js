@@ -1,4 +1,5 @@
 import { normalizeEvent } from './normalizer.js';
+import { log } from './logger.js';
 
 export function routeEvent(event, botId, seen = new Set()) {
   const payload = normalizeEvent(event, botId);
@@ -28,5 +29,5 @@ export function responsePlan(payload, send) {
 }
 
 export function logDecision(event, payload = {}) {
-  console.log(JSON.stringify({ event, chat_type: payload.chat_type, message_id: payload.message_id }));
+  log(event, { chat_type: payload.chat_type, message_id: payload.message_id });
 }

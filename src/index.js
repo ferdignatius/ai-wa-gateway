@@ -1,4 +1,5 @@
 import { createWhatsAppGateway } from './whatsapp.js';
+import { logError } from './logger.js';
 
 const backendUrl = process.env.BACKEND_URL;
 
@@ -17,15 +18,15 @@ function validateBackendUrl(value) {
 }
 
 if (!backendUrl) {
-  console.error('Missing BACKEND_URL');
+  logError('gateway_start_failed', new Error('Missing BACKEND_URL'));
   process.exitCode = 1;
 } else {
   try {
     const gateway = createWhatsAppGateway({ backendUrl: validateBackendUrl(backendUrl) });
-    gateway.start();
+    gateway.start().catch(error => { logError('gateway_runtime_failed', error); process.exitCode = 1; });
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => gateway.stop().finally(() => process.exit(0)));
   } catch (error) {
-    console.error(error.message);
+    logError('gateway_start_failed', error);
     process.exitCode = 1;
   }
 }
