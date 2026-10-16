@@ -1,0 +1,9 @@
+node_modules
+.wwebjs_auth
+.wwebjs_cache
+.git
+.gitignore
+.env
+.env.*
+!*.example
+test
