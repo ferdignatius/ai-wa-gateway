@@ -15,11 +15,15 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
   let stopping = false;
   let botId = '';
   let ready = false;
+  let disconnectTimer;
+  const configuredDisconnectExitMs = Number(process.env.DISCONNECT_EXIT_MS);
+  const disconnectExitMs = configuredDisconnectExitMs > 0 ? configuredDisconnectExitMs : 60_000;
+  const executablePath = process.env.CHROME_BIN || (process.platform === 'linux' ? '/usr/bin/chromium' : undefined);
   const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
       headless: true,
-      executablePath: process.env.CHROME_BIN || '/usr/bin/chromium',
+      ...(executablePath ? { executablePath } : {}),
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     },
   });
@@ -28,6 +32,8 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
 
   client.on('ready', () => {
     ready = true;
+    clearTimeout(disconnectTimer);
+    disconnectTimer = undefined;
     botId = client.info.wid._serialized;
     log('gateway_ready', { bot_id: botId });
   });
@@ -35,6 +41,12 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
   client.on('disconnected', reason => {
     ready = false;
     log('gateway_disconnected', { reason });
+    clearTimeout(disconnectTimer);
+    disconnectTimer = setTimeout(() => {
+      log('gateway_disconnect_restart_requested', { delay_ms: disconnectExitMs });
+      process.exit(1);
+    }, disconnectExitMs);
+    disconnectTimer.unref?.();
   });
 
   client.on('auth_failure', message => {
@@ -98,6 +110,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
     stop: async () => {
       if (stopping) return;
       stopping = true;
+      clearTimeout(disconnectTimer);
       log('gateway_shutdown_started', { pending });
       await Promise.race([
         client.destroy(),

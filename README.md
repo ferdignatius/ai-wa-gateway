@@ -52,7 +52,8 @@ ALLOW_PRIVATE_BACKEND=true
 `BACKEND_URL` adalah endpoint HTTP backend, bukan URL WhatsApp. Gateway mengirim `POST` JSON ke endpoint ini.
 Private backend host ditolak secara default. Set `ALLOW_PRIVATE_BACKEND=true` untuk Docker, intranet, atau localhost backend.
 
-Health: `GET /healthz` untuk liveness, `GET /readyz` untuk readiness.
+Health: `GET /healthz` untuk liveness, `GET /readyz` untuk readiness pada port `3001` default. Override dengan `PORT`.
+Jika WhatsApp disconnected lebih dari 60 detik, proses exit dengan code 1 agar orchestrator restart. Override dengan `DISCONNECT_EXIT_MS`.
 
 ## Backend contract
 

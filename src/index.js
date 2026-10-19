@@ -1,5 +1,5 @@
 import { createWhatsAppGateway } from './whatsapp.js';
-import { logError } from './logger.js';
+import { log, logError } from './logger.js';
 import { createServer } from 'node:http';
 
 const backendUrl = process.env.BACKEND_URL;
@@ -37,7 +37,8 @@ if (!backendUrl) {
       response.writeHead(isReadiness && !health.ready ? 503 : 200, { 'content-type': 'application/json' });
       response.end(JSON.stringify(health));
     });
-    healthServer.listen(Number(process.env.PORT || 3000), process.env.HOST || '0.0.0.0', () => log('health_server_ready', { port: Number(process.env.PORT || 3000) }));
+    const healthPort = Number(process.env.PORT || 3001);
+    healthServer.listen(healthPort, process.env.HOST || '0.0.0.0', () => log('health_server_ready', { port: healthPort }));
     gateway.start().catch(error => { logError('gateway_runtime_failed', error); process.exitCode = 1; });
     let shuttingDown = false;
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
