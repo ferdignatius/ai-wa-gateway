@@ -2,6 +2,7 @@ import whatsapp from 'whatsapp-web.js';
 import { routeEvent, responsePlan, logDecision } from './core.js';
 import { createHttpBackend } from './backend.js';
 import { log, logError } from './logger.js';
+import qrcode from 'qrcode-terminal';
 
 const { Client, LocalAuth } = whatsapp;
 
@@ -13,11 +14,32 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
   let pending = 0;
   let stopping = false;
   let botId = '';
-  const client = new Client({ authStrategy: new LocalAuth() });
+  let ready = false;
+  const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+      headless: true,
+      executablePath: process.env.CHROME_BIN || '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    },
+  });
+
+  client.on('qr', qr => qrcode.generate(qr, { small: true }));
 
   client.on('ready', () => {
+    ready = true;
     botId = client.info.wid._serialized;
     log('gateway_ready', { bot_id: botId });
+  });
+
+  client.on('disconnected', reason => {
+    ready = false;
+    log('gateway_disconnected', { reason });
+  });
+
+  client.on('auth_failure', message => {
+    ready = false;
+    log('gateway_auth_failure', { message });
   });
 
   client.on('message', async message => {
@@ -34,6 +56,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
       for (const [id, expires] of seen) if (expires <= now) seen.delete(id);
       const ids = new Set(seen.keys());
       const decision = routeEvent(event, botId, ids);
+      if (decision.logs.includes('ignored_group_no_mention')) return;
       if (decision.action !== 'reject_duplicate' && decision.payload.message_id) {
         seen.set(decision.payload.message_id, now + TTL_MS);
         while (seen.size > MAX_SEEN) seen.delete(seen.keys().next().value);
@@ -46,6 +69,11 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
 
       if (result == null) return;
       const plan = responsePlan(decision.payload, result);
+      try {
+        await (await message.getChat()).sendStateTyping();
+      } catch (error) {
+        logError('typing_state_failed', error, { message_id: decision.payload.message_id });
+      }
       await new Promise(resolve => setTimeout(resolve, plan.delayMs));
 
       try {
@@ -66,11 +94,25 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
   return {
     client,
     start: async () => { log('gateway_starting'); await client.initialize(); },
-    stop: async () => { stopping = true; log('gateway_shutdown_started', { pending }); await client.destroy(); log('gateway_shutdown_completed'); },
+    health: () => ({ ready, stopping, pending }),
+    stop: async () => {
+      if (stopping) return;
+      stopping = true;
+      log('gateway_shutdown_started', { pending });
+      await Promise.race([
+        client.destroy(),
+        new Promise(resolve => setTimeout(() => {
+          log('gateway_shutdown_timeout', { timeout_ms: 5000 });
+          resolve();
+        }, 5000)),
+      ]);
+      log('gateway_shutdown_completed');
+    },
   };
 }
 
 async function normalizeWhatsAppMessage(message) {
+  if (message.type !== 'chat' && !(message.hasMedia && message.body)) return null;
   const chat = await message.getChat();
   const quoted = message.hasQuotedMsg ? await message.getQuotedMessage() : null;
   return message.hasMedia && !message.body ? null : {

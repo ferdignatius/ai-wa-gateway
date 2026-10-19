@@ -1,5 +1,6 @@
 import { createWhatsAppGateway } from './whatsapp.js';
 import { logError } from './logger.js';
+import { createServer } from 'node:http';
 
 const backendUrl = process.env.BACKEND_URL;
 
@@ -11,11 +12,14 @@ function validateBackendUrl(value) {
     /^(127|10)\./.test(host) || /^192\.168\./.test(host) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host === '0.0.0.0' ||
     host === '169.254.169.254';
-  if (privateHost) {
+  if (privateHost && process.env.ALLOW_PRIVATE_BACKEND !== 'true') {
     throw new Error('BACKEND_URL private host is not allowed');
   }
   return url.href;
 }
+
+process.on('uncaughtException', error => logError('uncaught_exception', error));
+process.on('unhandledRejection', error => logError('unhandled_rejection', error));
 
 if (!backendUrl) {
   logError('gateway_start_failed', new Error('Missing BACKEND_URL'));
@@ -23,8 +27,25 @@ if (!backendUrl) {
 } else {
   try {
     const gateway = createWhatsAppGateway({ backendUrl: validateBackendUrl(backendUrl) });
+    const healthServer = createServer((request, response) => {
+      const health = gateway.health();
+      const isReadiness = request.url === '/readyz';
+      if (request.url !== '/healthz' && !isReadiness) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(isReadiness && !health.ready ? 503 : 200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(health));
+    });
+    healthServer.listen(Number(process.env.PORT || 3000), process.env.HOST || '0.0.0.0', () => log('health_server_ready', { port: Number(process.env.PORT || 3000) }));
     gateway.start().catch(error => { logError('gateway_runtime_failed', error); process.exitCode = 1; });
-    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => gateway.stop().finally(() => process.exit(0)));
+    let shuttingDown = false;
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      healthServer.close();
+      gateway.stop().finally(() => process.exit(0));
+    });
   } catch (error) {
     logError('gateway_start_failed', error);
     process.exitCode = 1;

@@ -46,9 +46,13 @@ Scan QR yang tampil di terminal. Session tersimpan di `.wwebjs_auth`, jadi QR ti
 
 ```env
 BACKEND_URL=http://localhost:3000/webhook/whatsapp
+ALLOW_PRIVATE_BACKEND=true
 ```
 
 `BACKEND_URL` adalah endpoint HTTP backend, bukan URL WhatsApp. Gateway mengirim `POST` JSON ke endpoint ini.
+Private backend host ditolak secara default. Set `ALLOW_PRIVATE_BACKEND=true` untuk Docker, intranet, atau localhost backend.
+
+Health: `GET /healthz` untuk liveness, `GET /readyz` untuk readiness.
 
 ## Backend contract
 

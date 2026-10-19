@@ -20,10 +20,10 @@ export function createHttpBackend({ url, token = '', fetchImpl = fetch, timeoutM
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const response = await fetchImpl(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: serialized,
-        signal: controller.signal,
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+          body: serialized,
+          signal: controller.signal,
         });
         if (!response.ok) {
           const error = new Error(`Backend HTTP ${response.status}`);

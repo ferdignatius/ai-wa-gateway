@@ -23,7 +23,13 @@ test('rejects duplicate IDs and redacts payload plus quote', () => {
 
 test('preserves all group mentions for response', () => {
   const payload = normalizeEvent(base({ mentionedJid: ['bot', 'u2', 'u3'] }), 'bot');
-  assert.deepEqual(payload.response_mentions, ['u2', 'u3']);
+  assert.deepEqual(payload.response_mentions, ['u1', 'u2', 'u3']);
+});
+
+test('adds bot and sender for fallback mentions', () => {
+  const payload = normalizeEvent(base({ mentionedJid: [], text: 'hello @12345' }), '12345');
+  assert.deepEqual(payload.mentioned_bot_ids, ['12345']);
+  assert.deepEqual(payload.response_mentions, ['u1']);
 });
 
 test('redacts address and rejects private-data access request', () => {
