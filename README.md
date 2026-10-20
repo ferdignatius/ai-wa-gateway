@@ -126,10 +126,10 @@ BACKEND_URL=http://host.docker.internal:3000/api/profiles/ferdinand_assistant/me
 
 ## Docker
 
-Build:
+Pull:
 
 ```bash
-docker build -t wa-gateway-assistant .
+docker pull ferdignatius/ai-wa-gateway:latest
 ```
 
 Run:
@@ -139,7 +139,13 @@ docker run -it --init \
   --env-file .env \
   -v wa-gateway-auth:/app/.wwebjs_auth \
   -v wa-gateway-cache:/app/.wwebjs_cache \
-  wa-gateway-assistant
+  ferdignatius/ai-wa-gateway:latest
+```
+
+Build lokal:
+
+```bash
+docker build -t ferdignatius/ai-wa-gateway:latest .
 ```
 
 Scan QR dari terminal container. Volume auth menjaga session WhatsApp.
