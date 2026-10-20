@@ -8,8 +8,10 @@ export function routeEvent(event, botId, seen = new Set()) {
 
   if (payload.is_unsafe_request) return decision('rejected_unsafe_request', payload, false);
   if (payload.chat_type === 'dm') return decision('processed_dm', payload);
-  if (!payload.is_bot_mentioned) return decision('ignored_group_no_mention', payload, false);
-  if (!payload.mentioned_bot_ids.length) return decision('ignored_group_other_bot', payload, false);
+  if (!payload.is_bot_mentioned) {
+    if (payload._has_other_mentions) return decision('ignored_group_other_bot', payload, false);
+    return decision('ignored_group_no_mention', payload, false);
+  }
   return decision('processed_group_mention', payload);
 }
 

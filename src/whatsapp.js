@@ -24,7 +24,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
     puppeteer: {
       headless: true,
       ...(executablePath ? { executablePath } : {}),
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     },
   });
 
@@ -34,7 +34,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
     ready = true;
     clearTimeout(disconnectTimer);
     disconnectTimer = undefined;
-    botId = client.info.wid._serialized;
+    botId = client.info?.wid?._serialized ? client.info.wid._serialized.replace(/:\d+@/, '@') : '';
     log('gateway_ready', { bot_id: botId });
   });
 
@@ -65,7 +65,10 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
 
       if (!event) return;
       const now = Date.now();
-      for (const [id, expires] of seen) if (expires <= now) seen.delete(id);
+      for (const [id, expires] of seen) {
+        if (expires <= now) seen.delete(id);
+        else break;
+      }
       const ids = new Set(seen.keys());
       const decision = routeEvent(event, botId, ids);
       if (decision.logs.includes('ignored_group_no_mention')) return;
@@ -76,7 +79,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
       decision.logs.forEach(eventName => logDecision(eventName, decision.payload));
 
       if (decision.action !== 'process') return;
-      const { _redacted, is_unsafe_request, ...backendPayload } = decision.payload;
+      const { _redacted, is_unsafe_request, _has_other_mentions, ...backendPayload } = decision.payload;
       const result = await handlePayload?.(backendPayload);
 
       if (result == null) return;
@@ -112,6 +115,10 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
       stopping = true;
       clearTimeout(disconnectTimer);
       log('gateway_shutdown_started', { pending });
+      const shutdownStart = Date.now();
+      while (pending > 0 && Date.now() - shutdownStart < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
       await Promise.race([
         client.destroy(),
         new Promise(resolve => setTimeout(() => {
@@ -126,19 +133,26 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
 
 async function normalizeWhatsAppMessage(message) {
   if (message.type !== 'chat' && !(message.hasMedia && message.body)) return null;
-  const chat = await message.getChat();
-  const quoted = message.hasQuotedMsg ? await message.getQuotedMessage() : null;
+  let chat;
+  try {
+    chat = await message.getChat();
+  } catch {
+    chat = null;
+  }
+  const isGroup = chat ? chat.isGroup : (message.from?.endsWith('@g.us') || Boolean(message.author));
+  const chatId = chat?.id?._serialized || message.from || '';
+  const quoted = message.hasQuotedMsg ? await message.getQuotedMessage().catch(() => null) : null;
   return message.hasMedia && !message.body ? null : {
-    chatType: chat.isGroup ? 'group' : 'dm',
-    chatId: chat.id._serialized,
-    senderId: message.author ?? message.from,
-    messageId: message.id._serialized,
-    text: message.body,
+    chatType: isGroup ? 'group' : 'dm',
+    chatId,
+    senderId: message.author ?? message.from ?? '',
+    messageId: message.id?._serialized ?? '',
+    text: message.body ?? '',
     mentionedJid: message.mentionedIds,
     quotedMessage: quoted && {
-      messageId: quoted.id._serialized,
-      senderId: quoted.author ?? quoted.from,
-      text: quoted.body,
+      messageId: quoted.id?._serialized ?? '',
+      senderId: quoted.author ?? quoted.from ?? '',
+      text: quoted.body ?? '',
     },
   };
 }
