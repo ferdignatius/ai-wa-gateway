@@ -1,6 +1,7 @@
 services:
   gateway:
-    build: .
+    image: ferdignatius/ai-wa-gateway:latest
+    restart: unless-stopped
     ports:
       - "3001:3001"
     environment:
@@ -11,6 +12,11 @@ services:
     volumes:
       - wwebjs-auth:/app/.wwebjs_auth
       - wwebjs-cache:/app/.wwebjs_cache
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   wwebjs-auth:
