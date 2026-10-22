@@ -1,4 +1,4 @@
-# WhatsApp Gateway Assistant
+# AI WhatsApp Gateway
 
 Gateway WhatsApp transport-only untuk menghubungkan WhatsApp Web ke backend HTTP seperti n8n atau Hermes.
 
@@ -136,6 +136,7 @@ Run:
 
 ```bash
 docker run -it --init \
+  --shm-size=256m \
   --env-file .env \
   -v wa-gateway-auth:/app/.wwebjs_auth \
   -v wa-gateway-cache:/app/.wwebjs_cache \
@@ -187,6 +188,10 @@ Expected:
 
 - Copy `.env.example` menjadi `.env`.
 - Pastikan environment variable tersedia di shell atau Docker.
+
+`Missing BACKEND_TOKEN`
+
+- Pastikan `BACKEND_TOKEN` tersedia di `.env` atau environment container.
 
 QR muncul setiap restart
 

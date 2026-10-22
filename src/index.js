@@ -3,6 +3,7 @@ import { log, logError } from './logger.js';
 import { createServer } from 'node:http';
 
 const backendUrl = process.env.BACKEND_URL;
+const backendToken = process.env.BACKEND_TOKEN;
 
 function validateBackendUrl(value) {
   const url = new URL(value);
@@ -23,6 +24,9 @@ process.on('unhandledRejection', error => logError('unhandled_rejection', error)
 
 if (!backendUrl) {
   logError('gateway_start_failed', new Error('Missing BACKEND_URL'));
+  process.exitCode = 1;
+} else if (!backendToken) {
+  logError('gateway_start_failed', new Error('Missing BACKEND_TOKEN'));
   process.exitCode = 1;
 } else {
   try {

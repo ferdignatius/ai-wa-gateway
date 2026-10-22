@@ -1,0 +1,17 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?BACKEND_URL is required}
+      BACKEND_TOKEN: ${BACKEND_TOKEN:?BACKEND_TOKEN is required}
+      PORT: 3001
+    shm_size: 256m
+    volumes:
+      - wwebjs-auth:/app/.wwebjs_auth
+      - wwebjs-cache:/app/.wwebjs_cache
+
+volumes:
+  wwebjs-auth:
+  wwebjs-cache:
