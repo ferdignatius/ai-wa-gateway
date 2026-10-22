@@ -3,11 +3,13 @@ services:
     image: ferdignatius/ai-wa-gateway:latest
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "${PORT:-3001}:${PORT:-3001}"
     environment:
       BACKEND_URL: ${BACKEND_URL:?BACKEND_URL is required}
       BACKEND_TOKEN: ${BACKEND_TOKEN:?BACKEND_TOKEN is required}
-      PORT: 3001
+      PORT: ${PORT:-3001}
+      ALLOW_PRIVATE_BACKEND: ${ALLOW_PRIVATE_BACKEND:-false}
+      DISCONNECT_EXIT_MS: ${DISCONNECT_EXIT_MS:-60000}
     shm_size: 256m
     volumes:
       - wwebjs-auth:/app/.wwebjs_auth
