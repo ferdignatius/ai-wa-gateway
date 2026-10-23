@@ -122,8 +122,6 @@ Contoh konfigurasi di `.env`:
 HERMES_ENABLED=true
 HERMES_URL=http://<host-hermes>:8642/v1/chat/completions
 HERMES_TOKEN=<API_SERVER_KEY>
-HERMES_MODEL=cx/gpt-5.6-luna
-HERMES_SYSTEM_PROMPT=
 ALLOW_PRIVATE_BACKEND=true
 ```
 
