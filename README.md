@@ -26,7 +26,7 @@ PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
-$env:BACKEND_URL="http://localhost:3000/webhook/whatsapp"
+$env:HERMES_URL="http://localhost:3000/api/profiles/ferdinand_assistant/message"
 pnpm start
 ```
 
@@ -45,9 +45,14 @@ Scan QR yang tampil di terminal. Session tersimpan di `.wwebjs_auth`, jadi QR ti
 `.env.example`:
 
 ```env
-BACKEND_URL=http://localhost:3000/webhook/whatsapp
+HERMES_ENABLED=true
+HERMES_URL=http://localhost:3000/api/profiles/ferdinand_assistant/message
+HERMES_TOKEN=
 ALLOW_PRIVATE_BACKEND=true
 ```
+
+Hermes aktif secara default. Saat aktif, `HERMES_URL` dan `HERMES_TOKEN` wajib diisi. Gateway tidak diam-diam mengirim data ke backend generic.
+Untuk mematikan Hermes dan memakai n8n atau backend lain, set `HERMES_ENABLED=false`.
 
 `BACKEND_URL` adalah endpoint HTTP backend, bukan URL WhatsApp. Gateway mengirim `POST` JSON ke endpoint ini.
 Private backend host ditolak secara default. Set `ALLOW_PRIVATE_BACKEND=true` untuk Docker, intranet, atau localhost backend.
