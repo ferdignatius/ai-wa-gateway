@@ -23,10 +23,8 @@ function decision(event, payload, process = true) {
 }
 
 export function responsePlan(payload, send) {
-  const length = String(send ?? '').trim().length;
-  const typingMs = Math.min(12_000, Math.max(1_000, Math.round(length * 35)));
   return {
-    delayMs: typingMs + Math.floor(Math.random() * 1001),
+    delayMs: 1000 + Math.floor(Math.random() * 1001),
     mentions: payload.response_mentions,
     send,
   };

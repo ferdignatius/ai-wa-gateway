@@ -36,18 +36,12 @@ if (!backendUrl) {
   try {
     const gateway = createWhatsAppGateway({ backendUrl: validateBackendUrl(backendUrl), backendToken });
     const healthServer = createServer((request, response) => {
-      const authorization = request.headers.authorization;
-      if (authorization !== `Bearer ${backendToken}`) {
-        response.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': 'Bearer' });
-        response.end(JSON.stringify({ error: 'Unauthorized' }));
-        return;
-      }
-      const health = { ...gateway.health(), version };
       const isReadiness = request.url === '/readyz';
       if (request.url !== '/healthz' && !isReadiness) {
         response.writeHead(404).end();
         return;
       }
+      const health = { ...gateway.health(), version };
       response.writeHead(isReadiness && !health.ready ? 503 : 200, { 'content-type': 'application/json' });
       response.end(JSON.stringify(health));
     });

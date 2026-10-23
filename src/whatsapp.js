@@ -10,7 +10,8 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
   const handlePayload = onPayload ?? createHttpBackend({ url: backendUrl, token: backendToken });
   const seen = new Map();
   const senderWindows = new Map();
-  const RATE_LIMIT = 20;
+  const configuredRateLimit = Number(process.env.RATE_LIMIT);
+  const RATE_LIMIT = Number.isFinite(configuredRateLimit) && configuredRateLimit >= 0 ? configuredRateLimit : 100;
   const RATE_WINDOW_MS = 60 * 60 * 1000;
   const MAX_SEEN = 10000;
   const TTL_MS = 24 * 60 * 60 * 1000;
@@ -80,13 +81,18 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
       if (now - window.started >= RATE_WINDOW_MS) { window.started = now; window.count = 0; }
       window.count += 1;
       senderWindows.set(sender, window);
-      if (window.count > RATE_LIMIT) {
+      if (RATE_LIMIT > 0 && window.count > RATE_LIMIT) {
         log('message_dropped_rate_limit', { sender_id: sender });
         return;
       }
       for (const [id, expires] of seen) {
         if (expires <= now) seen.delete(id);
         else break;
+      }
+      if (senderWindows.size > 1000) {
+        for (const [senderId, win] of senderWindows) {
+          if (now - win.started >= RATE_WINDOW_MS) senderWindows.delete(senderId);
+        }
       }
       const ids = new Set(seen.keys());
       const decision = routeEvent(event, botId, ids);
@@ -101,10 +107,12 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
 
       // Start typing state immediately so users know the assistant received their message
       try {
-        const chat = await message.getChat();
-        await chat.sendStateTyping();
+        const chat = event._chat ?? await message.getChat().catch(() => null);
+        if (chat && typeof chat.sendStateTyping === 'function') {
+          await chat.sendStateTyping().catch(() => {});
+        }
       } catch (error) {
-        logError('typing_state_failed', error, { message_id: decision.payload.message_id });
+        log('typing_state_failed', { message_id: decision.payload.message_id, error: String(error?.message || error) });
       }
 
       const { _redacted, is_unsafe_request, _has_other_mentions, ...backendPayload } = decision.payload;
@@ -154,7 +162,8 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
   };
 }
 
-async function normalizeWhatsAppMessage(message) {
+export async function normalizeWhatsAppMessage(message) {
+  if (message.fromMe) return null;
   if (message.type !== 'chat' && !(message.hasMedia && message.body)) return null;
   let chat;
   try {
@@ -165,15 +174,17 @@ async function normalizeWhatsAppMessage(message) {
   const isGroup = chat ? chat.isGroup : (message.from?.endsWith('@g.us') || Boolean(message.author));
   const chatId = chat?.id?._serialized || message.from || '';
   const quoted = message.hasQuotedMsg ? await message.getQuotedMessage().catch(() => null) : null;
+  const messageId = message.id?._serialized || message.id?.id || (typeof message.id === 'string' ? message.id : '');
   return message.hasMedia && !message.body ? null : {
+    _chat: chat,
     chatType: isGroup ? 'group' : 'dm',
     chatId,
     senderId: message.author ?? message.from ?? '',
-    messageId: message.id?._serialized ?? '',
+    messageId,
     text: message.body ?? '',
     mentionedJid: message.mentionedIds,
     quotedMessage: quoted && {
-      messageId: quoted.id?._serialized ?? '',
+      messageId: quoted.id?._serialized || quoted.id?.id || (typeof quoted.id === 'string' ? quoted.id : ''),
       senderId: quoted.author ?? quoted.from ?? '',
       text: quoted.body ?? '',
     },
