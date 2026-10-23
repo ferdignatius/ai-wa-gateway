@@ -30,15 +30,31 @@ function normalizeReply(reply) {
   };
 }
 
+const TAG_ALL_PATTERNS = [
+  /@(?:everyone|all|semua|here|channel|tagall|tag-all)\b/i,
+];
+
+export function isTagAllBroadcast(text, mentioned = []) {
+  if (TAG_ALL_PATTERNS.some(p => p.test(String(text ?? '')))) {
+    return true;
+  }
+  if (Array.isArray(mentioned) && mentioned.length > 4) {
+    return true;
+  }
+  return false;
+}
+
 export function normalizeEvent(event, botId) {
   const chatType = event.chatType === 'group' || event.isGroup ? 'group' : 'dm';
   const botList = asIds(Array.isArray(botId) ? botId : [botId, event.botId]);
   const primaryBot = botList[0] || '';
   const mentioned = asIds(event.mentionedJid ?? event.mentions);
   const text = textOf(event.message ?? event);
-  const hasBotMention = mentioned.some(id => botList.includes(id)) || fallbackMention(text, botList, mentioned);
+  const isTagAll = chatType === 'group' && isTagAllBroadcast(text, mentioned);
+  const hasBotMention = (mentioned.some(id => botList.includes(id)) || fallbackMention(text, botList, mentioned)) && !isTagAll;
   const normalizedMentions = hasBotMention && !mentioned.some(id => botList.includes(id)) && primaryBot ? [...mentioned, primaryBot] : mentioned;
-  const cleanText = redact(text);
+  const strippedText = stripBotMentions(text, botList);
+  const cleanText = redact(strippedText);
   const reply = normalizeReply(event.quotedMessage ?? event.quoted);
   const sender = cleanJid(event.senderId ?? event.participant ?? '');
 
@@ -49,13 +65,30 @@ export function normalizeEvent(event, botId) {
     message_id: String(event.messageId ?? event.id ?? ''),
     text: cleanText.text,
     is_bot_mentioned: chatType === 'dm' || hasBotMention,
-    mentioned_bot_ids: normalizedMentions.filter(id => botList.includes(id)),
+    mentioned_bot_ids: isTagAll ? [] : normalizedMentions.filter(id => botList.includes(id)),
     reply,
-    response_mentions: chatType === 'group' && hasBotMention ? [...new Set([sender, ...normalizedMentions.filter(id => !botList.includes(id))])].filter(Boolean) : [],
+    response_mentions: chatType === 'group' && hasBotMention ? [...new Set([sender, ...normalizedMentions.filter(id => !botList.includes(id))])].slice(0, 3).filter(Boolean) : [],
     is_unsafe_request: isUnsafeRequest(text),
+    is_tag_all: isTagAll,
     _has_other_mentions: mentioned.some(id => !botList.includes(id)),
     _redacted: cleanText.changed || Boolean(reply && redact(textOf(event.quotedMessage ?? event.quoted)).changed),
   };
+}
+
+function stripBotMentions(text, botList) {
+  let cleaned = String(text ?? '');
+  for (const bot of botList) {
+    if (!bot) continue;
+    const num = bot.replace(/[^0-9]/g, '');
+    if (num && num.length >= 7) {
+      cleaned = cleaned.replace(new RegExp(`@\\+?${num}\\b`, 'g'), '');
+    }
+    const user = bot.replace(/@.*$/, '');
+    if (user) {
+      cleaned = cleaned.replace(new RegExp(`@${user}\\b`, 'g'), '');
+    }
+  }
+  return cleaned.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 function fallbackMention(text, botList, mentioned) {
@@ -66,8 +99,10 @@ function fallbackMention(text, botList, mentioned) {
     if (mentioned.includes(botId)) return false;
     const botNumber = botId.replace(/[^0-9]/g, '');
     if (botNumber && botNumber.length >= 7) {
-      if (new RegExp(`@${botNumber}\\b`).test(text)) return true;
+      if (new RegExp(`@\\+?${botNumber}\\b`).test(text)) return true;
     }
+    const botUser = botId.replace(/@.*$/, '');
+    if (botUser && new RegExp(`@${botUser}\\b`).test(text)) return true;
   }
   return false;
 }

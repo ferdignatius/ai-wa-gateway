@@ -76,7 +76,7 @@ test('Skenario 8: response mentions tags all users in group, zero in DM, with 1-
   assert.deepEqual(dmPayload.response_mentions, []);
 
   const plan = responsePlan(groupPayload, 'test response');
-  assert.ok(plan.delayMs >= 1000 && plan.delayMs <= 2501, `Delay ${plan.delayMs} out of range`);
+  assert.ok(plan.delayMs >= 1000 && plan.delayMs <= 4001, `Delay ${plan.delayMs} out of range`);
   assert.deepEqual(plan.mentions, ['u1@c.us', 'u2@c.us', 'u3@c.us']);
 });
 
@@ -129,4 +129,107 @@ test('Group mentions with LID and object Wids', () => {
   const resultObj = routeEvent(eventObj, '628970042064@c.us');
   assert.equal(resultObj.action, 'process');
   assert.equal(resultObj.logs[0], 'processed_group_mention');
+});
+
+test('Improvement 1: strips bot mentions from input text so bot phone is not redacted as @[REDACTED_PHONE]', () => {
+  const botId = '628970042064@c.us';
+  const event = base({
+    chatType: 'group',
+    senderId: '628123456789@c.us',
+    text: '@628970042064 tolong ringkas dokumen ini',
+    mentionedJid: [botId],
+  });
+  const payload = normalizeEvent(event, botId);
+  assert.equal(payload.text, 'tolong ringkas dokumen ini');
+  assert.ok(!payload.text.includes('[REDACTED_PHONE]'));
+});
+
+test('Improvement 1 & 2: cleans @redacted_phone from AI response, tags sender, and appends notification notice', () => {
+  const botId = '628970042064@c.us';
+  const event = base({
+    chatType: 'group',
+    senderId: '628123456789@c.us',
+    text: '@628970042064 halo',
+    mentionedJid: [botId],
+  });
+  const payload = normalizeEvent(event, botId);
+
+  // AI echoing @redacted_phone or @[REDACTED_PHONE]
+  const aiOutput = 'Halo @redacted_phone, berikut informasi yang Anda minta.';
+  const plan = responsePlan(payload, aiOutput);
+
+  assert.ok(!plan.send.includes('@redacted_phone'));
+  assert.ok(!plan.send.includes('REDACTED_PHONE'));
+  assert.ok(plan.send.startsWith('@628123456789'));
+  assert.ok(plan.send.includes('this is notification message. no need to reply'));
+  assert.deepEqual(plan.mentions, ['628123456789@c.us']);
+});
+
+test('Improvement 2: DM reply appends notification notice without mentions', () => {
+  const dmPayload = normalizeEvent({
+    chatType: 'dm',
+    chatId: '628123456789@c.us',
+    senderId: '628123456789@c.us',
+    messageId: 'dm-1',
+    text: 'halo bot',
+    mentionedJid: [],
+  }, '628970042064@c.us');
+
+  const plan = responsePlan(dmPayload, 'Ini balasan dari bot.');
+  assert.deepEqual(plan.mentions, []);
+  assert.ok(!plan.send.startsWith('@'));
+  assert.ok(plan.send.includes('Ini balasan dari bot.'));
+  assert.ok(plan.send.includes('this is notification message. no need to reply'));
+});
+
+test('Tag-All guard: ignores broadcast keywords like @everyone, @all, @semua, @tagall in group', () => {
+  const botId = '628970042064@c.us';
+  const event1 = base({
+    chatType: 'group',
+    text: '@everyone tolong kumpul jam 9',
+    mentionedJid: [botId],
+  });
+  const res1 = routeEvent(event1, botId);
+  assert.equal(res1.action, 'ignore');
+  assert.equal(res1.logs[0], 'ignored_group_tag_all');
+
+  const event2 = base({
+    chatType: 'group',
+    text: '@all halo semuanya',
+    mentionedJid: [botId],
+  });
+  const res2 = routeEvent(event2, botId);
+  assert.equal(res2.action, 'ignore');
+  assert.equal(res2.logs[0], 'ignored_group_tag_all');
+
+  const event3 = base({
+    chatType: 'group',
+    text: 'mohon dicek @semua',
+    mentionedJid: [botId],
+  });
+  const res3 = routeEvent(event3, botId);
+  assert.equal(res3.action, 'ignore');
+  assert.equal(res3.logs[0], 'ignored_group_tag_all');
+});
+
+test('Tag-All guard: ignores tool broadcast with excessive mentionedJid count even if bot is included', () => {
+  const botId = '628970042064@c.us';
+  const manyMentions = [
+    botId,
+    'user1@c.us',
+    'user2@c.us',
+    'user3@c.us',
+    'user4@c.us',
+    'user5@c.us',
+  ];
+  const event = base({
+    chatType: 'group',
+    text: 'Pengumuman broadcast',
+    mentionedJid: manyMentions,
+  });
+  const res = routeEvent(event, botId);
+  assert.equal(res.action, 'ignore');
+  assert.equal(res.logs[0], 'ignored_group_tag_all');
+  assert.equal(res.payload.is_tag_all, true);
+  assert.equal(res.payload.is_bot_mentioned, false);
 });

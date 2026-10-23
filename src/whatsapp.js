@@ -133,11 +133,11 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
       await new Promise(resolve => setTimeout(resolve, plan.delayMs));
 
       try {
-        await message.reply(String(result), undefined, { mentions: plan.mentions });
+        await message.reply(plan.send, undefined, { mentions: plan.mentions });
         if (plan.mentions.length) logDecision('response_sender_mention_added', decision.payload);
       } catch (error) {
         if (plan.mentions.length) logDecision('response_sender_mention_failed', decision.payload);
-        await message.reply(String(result));
+        await message.reply(plan.send);
       }
     } catch (error) {
       logError('message_processing_failed', error, { message_id: message.id?._serialized });
