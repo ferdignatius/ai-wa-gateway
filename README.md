@@ -26,7 +26,7 @@ PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
-$env:HERMES_URL="http://localhost:3000/api/profiles/ferdinand_assistant/message"
+$env:HERMES_URL="http://localhost:8642/v1/chat/completions"
 pnpm start
 ```
 
@@ -46,8 +46,9 @@ Scan QR yang tampil di terminal. Session tersimpan di `.wwebjs_auth`, jadi QR ti
 
 ```env
 HERMES_ENABLED=true
-HERMES_URL=http://localhost:3000/api/profiles/ferdinand_assistant/message
+HERMES_URL=http://host.docker.internal:8642/v1/chat/completions
 HERMES_TOKEN=
+RATE_LIMIT=100
 ALLOW_PRIVATE_BACKEND=true
 ```
 
@@ -57,7 +58,8 @@ Untuk mematikan Hermes dan memakai n8n atau backend lain, set `HERMES_ENABLED=fa
 `BACKEND_URL` adalah endpoint HTTP backend, bukan URL WhatsApp. Gateway mengirim `POST` JSON ke endpoint ini.
 Private backend host ditolak secara default. Set `ALLOW_PRIVATE_BACKEND=true` untuk Docker, intranet, atau localhost backend.
 
-Health: `GET /healthz` untuk liveness, `GET /readyz` untuk readiness pada port `3001` default. Override dengan `PORT`.
+Health: `GET /healthz` untuk liveness, `GET /readyz` untuk readiness pada port `3001` default (tanpa auth untuk Docker/K8s). Override dengan `PORT`.
+Rate Limit: Maksimum pesan per jam per sender via `RATE_LIMIT` (default: 100, set `0` untuk nonaktifkan limit).
 Jika WhatsApp disconnected lebih dari 60 detik, proses exit dengan code 1 agar orchestrator restart. Override dengan `DISCONNECT_EXIT_MS`.
 
 ## Backend contract
@@ -178,6 +180,7 @@ Set `HERMES_TOKEN` in `.env`, then start both services:
 docker compose up -d
 
 - DM: semua pesan teks diproses.
+- Self-message dari bot diabaikan otomatis.
 - Group: hanya pesan dengan `mentionedJid` bot diproses.
 - Group tanpa mention atau mention bot lain: diabaikan.
 - Duplicate `messageId`: ditolak.
@@ -202,7 +205,7 @@ pnpm test
 Expected:
 
 ```text
-8 passed
+18 passed
 0 failed
 ```
 
@@ -225,5 +228,5 @@ QR muncul setiap restart
 Backend tidak membalas
 
 - Pastikan endpoint menerima `POST` JSON.
-- Pastikan response punya field string `text`.
+- Pastikan response punya field string `text` (n8n/generic) atau `choices[0].message.content` (Hermes/OpenAI).
 - Test URL dari environment gateway, bukan hanya dari host.
