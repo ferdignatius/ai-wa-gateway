@@ -109,24 +109,34 @@ Sesuaikan `output` dengan field hasil node AI.
 
 ## Hermes
 
-Hermes harus menyediakan HTTP endpoint yang menerima request contract di atas dan mengembalikan response contract.
+Hermes menggunakan endpoint OpenAI-compatible `/v1/chat/completions` via `api_server` (default port 8642).
 
-Contoh:
+Gateway secara otomatis mendeteksi format `/v1/chat/completions` dan menyusun body `{"model": "...", "messages": [...]}` serta menambahkan header session scoping WhatsApp:
+- `Authorization: Bearer <API_SERVER_KEY>`
+- `X-Hermes-Session-Key: <chat_id>`
+- `X-Hermes-Session-Id: <chat_id>`
+
+Contoh konfigurasi di `.env`:
 
 ```env
-BACKEND_URL=http://localhost:3000/api/profiles/ferdinand_assistant/message
+HERMES_ENABLED=true
+HERMES_URL=http://<host-hermes>:8642/v1/chat/completions
+HERMES_TOKEN=<API_SERVER_KEY>
+HERMES_MODEL=cx/gpt-5.6-luna
+HERMES_SYSTEM_PROMPT=
+ALLOW_PRIVATE_BACKEND=true
 ```
 
 Jika gateway dan Hermes sama-sama Docker Compose service:
 
 ```env
-BACKEND_URL=http://hermes:3000/api/profiles/ferdinand_assistant/message
+HERMES_URL=http://hermes:8642/v1/chat/completions
 ```
 
-Jika Hermes berjalan di host Windows sementara gateway di Docker:
+Jika Hermes berjalan di host atau node Tailscale:
 
 ```env
-BACKEND_URL=http://host.docker.internal:3000/api/profiles/ferdinand_assistant/message
+HERMES_URL=http://100.69.97.123:8642/v1/chat/completions
 ```
 
 ## Docker

@@ -3,8 +3,8 @@ import { log, logError } from './logger.js';
 import { createServer } from 'node:http';
 
 const hermesEnabled = process.env.HERMES_ENABLED !== 'false';
-const backendUrl = hermesEnabled ? process.env.HERMES_URL : process.env.BACKEND_URL;
-const backendToken = hermesEnabled ? process.env.HERMES_TOKEN : process.env.BACKEND_TOKEN;
+const backendUrl = hermesEnabled ? (process.env.HERMES_URL || process.env.BACKEND_URL) : process.env.BACKEND_URL;
+const backendToken = hermesEnabled ? (process.env.HERMES_TOKEN || process.env.BACKEND_TOKEN) : process.env.BACKEND_TOKEN;
 const version = process.env.npm_package_version || 'unknown';
 
 // ponytail: keep selection at startup; add runtime backend switching only when operators need it.
