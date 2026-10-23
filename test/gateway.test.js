@@ -76,7 +76,7 @@ test('Skenario 8: response mentions tags all users in group, zero in DM, with 1-
   assert.deepEqual(dmPayload.response_mentions, []);
 
   const plan = responsePlan(groupPayload, 'test response');
-  assert.ok(plan.delayMs >= 1000 && plan.delayMs <= 2000, `Delay ${plan.delayMs} out of 1000-2000ms`);
+  assert.ok(plan.delayMs >= 1000 && plan.delayMs <= 2501, `Delay ${plan.delayMs} out of range`);
   assert.deepEqual(plan.mentions, ['u1@c.us', 'u2@c.us', 'u3@c.us']);
 });
 
@@ -114,4 +114,19 @@ test('Fallback mentions and multi-device JID normalization', () => {
   assert.equal(payloadFallback.is_bot_mentioned, true);
   assert.deepEqual(payloadFallback.mentioned_bot_ids, ['628123456789@c.us']);
   assert.deepEqual(payloadFallback.response_mentions, ['u1@c.us']);
+});
+
+test('Group mentions with LID and object Wids', () => {
+  // WhatsApp modern group mention using LID
+  const botList = ['628970042064@c.us', '2793847291823@lid'];
+  const eventLid = base({ mentionedJid: ['2793847291823@lid'] });
+  const resultLid = routeEvent(eventLid, botList);
+  assert.equal(resultLid.action, 'process');
+  assert.equal(resultLid.logs[0], 'processed_group_mention');
+
+  // Object Wid structure
+  const eventObj = base({ mentionedJid: [{ _serialized: '628970042064@c.us' }] });
+  const resultObj = routeEvent(eventObj, '628970042064@c.us');
+  assert.equal(resultObj.action, 'process');
+  assert.equal(resultObj.logs[0], 'processed_group_mention');
 });

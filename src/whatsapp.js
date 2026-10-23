@@ -18,6 +18,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
   let pending = 0;
   let stopping = false;
   let botId = '';
+  let botIds = [];
   let ready = false;
   let disconnectTimer;
   const configuredDisconnectExitMs = Number(process.env.DISCONNECT_EXIT_MS);
@@ -41,13 +42,26 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
 
   client.on('qr', qr => qrcode.generate(qr, { small: true }));
 
-  client.on('ready', () => {
+  client.on('ready', async () => {
     ready = true;
     clearTimeout(disconnectTimer);
     disconnectTimer = undefined;
     botId = client.info?.wid?._serialized ? client.info.wid._serialized.replace(/:\d+@/, '@') : '';
+    let lid = '';
+    try {
+      lid = await client.pupPage.evaluate(() => {
+        try {
+          const { getMaybeMeLidUser } = window.require('WAWebUserPrefsMeUser');
+          const lidUser = getMaybeMeLidUser();
+          return lidUser?._serialized ? lidUser._serialized.replace(/:\d+@/, '@') : '';
+        } catch {
+          return '';
+        }
+      });
+    } catch {}
+    botIds = [botId, lid].filter(Boolean);
     client.sendPresenceAvailable().catch(() => {});
-    log('gateway_ready', { bot_id: botId });
+    log('gateway_ready', { bot_id: botId, bot_lid: lid });
   });
 
   client.on('disconnected', reason => {
@@ -96,7 +110,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
         }
       }
       const ids = new Set(seen.keys());
-      const decision = routeEvent(event, botId, ids);
+      const decision = routeEvent(event, botIds.length ? botIds : botId, ids);
       if (decision.logs.includes('ignored_group_no_mention')) return;
       if (decision.action !== 'reject_duplicate' && decision.payload.message_id) {
         seen.set(decision.payload.message_id, now + TTL_MS);
@@ -178,7 +192,7 @@ export async function normalizeWhatsAppMessage(message) {
     senderId: message.author ?? message.from ?? '',
     messageId,
     text: message.body ?? '',
-    mentionedJid: message.mentionedIds,
+    mentionedJid: message.mentionedIds || message._data?.mentionedJidList,
     quotedMessage: quoted && {
       messageId: quoted.id?._serialized || quoted.id?.id || (typeof quoted.id === 'string' ? quoted.id : ''),
       senderId: quoted.author ?? quoted.from ?? '',

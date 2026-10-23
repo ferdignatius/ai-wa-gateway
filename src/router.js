@@ -24,7 +24,7 @@ function decision(event, payload, process = true) {
 
 export function responsePlan(payload, send) {
   return {
-    delayMs: 1000 + Math.floor(Math.random() * 1001),
+    delayMs: 1000 + Math.floor(Math.random() * 3000),
     mentions: payload.response_mentions,
     send,
   };
