@@ -5,6 +5,7 @@ services:
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
     environment:
+      TZ: ${TZ:-Asia/Jakarta}
       HERMES_ENABLED: ${HERMES_ENABLED:-true}
       HERMES_URL: ${HERMES_URL:-}
       HERMES_TOKEN: ${HERMES_TOKEN:-}
@@ -13,10 +14,23 @@ services:
       PORT: ${PORT:-3001}
       ALLOW_PRIVATE_BACKEND: ${ALLOW_PRIVATE_BACKEND:-false}
       DISCONNECT_EXIT_MS: ${DISCONNECT_EXIT_MS:-60000}
-    shm_size: 256m
+    shm_size: 512m
     volumes:
       - wwebjs-auth:/app/.wwebjs_auth
       - wwebjs-cache:/app/.wwebjs_cache
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     logging:
       driver: json-file
       options:
