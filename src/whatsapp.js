@@ -46,6 +46,7 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
     clearTimeout(disconnectTimer);
     disconnectTimer = undefined;
     botId = client.info?.wid?._serialized ? client.info.wid._serialized.replace(/:\d+@/, '@') : '';
+    client.sendPresenceAvailable().catch(() => {});
     log('gateway_ready', { bot_id: botId });
   });
 
@@ -105,21 +106,16 @@ export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onE
 
       if (decision.action !== 'process') return;
 
-      // Start typing state immediately so users know the assistant received their message
-      try {
-        const chat = event._chat ?? await message.getChat().catch(() => null);
-        if (chat && typeof chat.sendStateTyping === 'function') {
-          await chat.sendStateTyping().catch(() => {});
-        }
-      } catch (error) {
-        log('typing_state_failed', { message_id: decision.payload.message_id, error: String(error?.message || error) });
-      }
+      // Start typing state so users know the assistant is processing
+      await sendTypingState(client, message, event.chatId);
 
       const { _redacted, is_unsafe_request, _has_other_mentions, ...backendPayload } = decision.payload;
       const result = await handlePayload?.(backendPayload);
 
       if (result == null) return;
       const plan = responsePlan(decision.payload, result);
+      // Keep typing active during the 1-2s delay before sending response
+      await sendTypingState(client, message, event.chatId);
       await new Promise(resolve => setTimeout(resolve, plan.delayMs));
 
       try {
@@ -189,4 +185,36 @@ export async function normalizeWhatsAppMessage(message) {
       text: quoted.body ?? '',
     },
   };
+}
+
+async function sendTypingState(client, message, chatId) {
+  if (!chatId) return;
+  try {
+    if (client?.pupPage && !client.pupPage.isClosed?.()) {
+      const sent = await client.pupPage.evaluate(async targetChatId => {
+        try {
+          if (window.WWebJS?.sendChatstate) {
+            await window.WWebJS.sendChatstate('typing', targetChatId);
+            return true;
+          }
+          const ChatState = window.require?.('WAWebChatStateBridge');
+          const WidFactory = window.require?.('WAWebWidFactory');
+          if (ChatState && WidFactory) {
+            const wid = WidFactory.createWid(targetChatId);
+            await ChatState.sendChatStateComposing(wid);
+            return true;
+          }
+        } catch {}
+        return false;
+      }, chatId).catch(() => false);
+      if (sent) return;
+    }
+  } catch {}
+
+  try {
+    const chat = await message?.getChat?.().catch(() => null);
+    if (chat && typeof chat.sendStateTyping === 'function') {
+      await chat.sendStateTyping().catch(() => {});
+    }
+  } catch {}
 }
