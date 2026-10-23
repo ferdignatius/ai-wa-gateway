@@ -6,9 +6,12 @@ import qrcode from 'qrcode-terminal';
 
 const { Client, LocalAuth } = whatsapp;
 
-export function createWhatsAppGateway({ onPayload, backendUrl, onError = console.error } = {}) {
-  const handlePayload = onPayload ?? createHttpBackend({ url: backendUrl, token: process.env.BACKEND_TOKEN });
+export function createWhatsAppGateway({ onPayload, backendUrl, backendToken, onError = console.error } = {}) {
+  const handlePayload = onPayload ?? createHttpBackend({ url: backendUrl, token: backendToken });
   const seen = new Map();
+  const senderWindows = new Map();
+  const RATE_LIMIT = 20;
+  const RATE_WINDOW_MS = 60 * 60 * 1000;
   const MAX_SEEN = 10000;
   const TTL_MS = 24 * 60 * 60 * 1000;
   let pending = 0;
@@ -24,7 +27,14 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
     puppeteer: {
       headless: true,
       ...(executablePath ? { executablePath } : {}),
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+      ],
     },
   });
 
@@ -65,6 +75,15 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
 
       if (!event) return;
       const now = Date.now();
+      const sender = event.senderId || event.chatId;
+      const window = senderWindows.get(sender) ?? { started: now, count: 0 };
+      if (now - window.started >= RATE_WINDOW_MS) { window.started = now; window.count = 0; }
+      window.count += 1;
+      senderWindows.set(sender, window);
+      if (window.count > RATE_LIMIT) {
+        log('message_dropped_rate_limit', { sender_id: sender });
+        return;
+      }
       for (const [id, expires] of seen) {
         if (expires <= now) seen.delete(id);
         else break;
@@ -79,16 +98,20 @@ export function createWhatsAppGateway({ onPayload, backendUrl, onError = console
       decision.logs.forEach(eventName => logDecision(eventName, decision.payload));
 
       if (decision.action !== 'process') return;
+
+      // Start typing state immediately so users know the assistant received their message
+      try {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+      } catch (error) {
+        logError('typing_state_failed', error, { message_id: decision.payload.message_id });
+      }
+
       const { _redacted, is_unsafe_request, _has_other_mentions, ...backendPayload } = decision.payload;
       const result = await handlePayload?.(backendPayload);
 
       if (result == null) return;
       const plan = responsePlan(decision.payload, result);
-      try {
-        await (await message.getChat()).sendStateTyping();
-      } catch (error) {
-        logError('typing_state_failed', error, { message_id: decision.payload.message_id });
-      }
       await new Promise(resolve => setTimeout(resolve, plan.delayMs));
 
       try {

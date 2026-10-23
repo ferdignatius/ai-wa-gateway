@@ -156,7 +156,18 @@ docker build -t ferdignatius/ai-wa-gateway:latest .
 
 Scan QR dari terminal container. Volume auth menjaga session WhatsApp.
 
-## Behavior
+## Docker Compose
+
+Requirements: Docker Desktop with Compose v2.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Set `HERMES_TOKEN` in `.env`, then start both services:
+
+```bash
+docker compose up -d
 
 - DM: semua pesan teks diproses.
 - Group: hanya pesan dengan `mentionedJid` bot diproses.

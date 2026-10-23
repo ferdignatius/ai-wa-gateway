@@ -4,5 +4,5 @@ export function log(event, fields = {}) {
 }
 
 export function logError(event, error, fields = {}) {
-  log(event, { ...fields, error: error?.message ?? String(error), error_name: error?.name });
+  log(event, { ...fields, error: error?.message ?? String(error), error_name: error?.name, stack: error?.stack });
 }

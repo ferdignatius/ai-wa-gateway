@@ -31,10 +31,11 @@ export function createHttpBackend({ url, token = '', fetchImpl = fetch, timeoutM
           throw error;
         }
         const body = await response.json();
-        if (!body || typeof body.text !== 'string' || !body.text.trim()) return null;
-        if (body.text.length > MAX_RESPONSE_CHARS) throw new Error('Backend response too large');
+        const extractedText = extractResponseText(body);
+        if (!extractedText || !extractedText.trim()) return null;
+        if (extractedText.length > MAX_RESPONSE_CHARS) throw new Error('Backend response too large');
         failures = 0;
-        return body.text;
+        return extractedText.trim();
       } catch (error) {
         failures += 1;
         logError('backend_request_failed', error, { attempt, retrying: attempt < MAX_RETRIES });
@@ -49,4 +50,18 @@ export function createHttpBackend({ url, token = '', fetchImpl = fetch, timeoutM
       }
     }
   };
+}
+
+function extractResponseText(body) {
+  if (!body) return '';
+  if (typeof body === 'string') return body;
+  if (typeof body.text === 'string') return body.text;
+  if (typeof body.reply === 'string') return body.reply;
+  if (typeof body.message === 'string') return body.message;
+  if (typeof body.response === 'string') return body.response;
+  if (typeof body.content === 'string') return body.content;
+  if (Array.isArray(body.choices) && typeof body.choices[0]?.message?.content === 'string') {
+    return body.choices[0].message.content;
+  }
+  return '';
 }

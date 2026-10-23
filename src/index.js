@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 const hermesEnabled = process.env.HERMES_ENABLED !== 'false';
 const backendUrl = hermesEnabled ? process.env.HERMES_URL : process.env.BACKEND_URL;
 const backendToken = hermesEnabled ? process.env.HERMES_TOKEN : process.env.BACKEND_TOKEN;
+const version = process.env.npm_package_version || 'unknown';
 
 // ponytail: keep selection at startup; add runtime backend switching only when operators need it.
 
@@ -33,9 +34,15 @@ if (!backendUrl) {
   process.exitCode = 1;
 } else {
   try {
-    const gateway = createWhatsAppGateway({ backendUrl: validateBackendUrl(backendUrl) });
+    const gateway = createWhatsAppGateway({ backendUrl: validateBackendUrl(backendUrl), backendToken });
     const healthServer = createServer((request, response) => {
-      const health = gateway.health();
+      const authorization = request.headers.authorization;
+      if (authorization !== `Bearer ${backendToken}`) {
+        response.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': 'Bearer' });
+        response.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+      const health = { ...gateway.health(), version };
       const isReadiness = request.url === '/readyz';
       if (request.url !== '/healthz' && !isReadiness) {
         response.writeHead(404).end();

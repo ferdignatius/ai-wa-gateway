@@ -1,12 +1,28 @@
 services:
+  hermes:
+    image: nousresearch/hermes-agent
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - "8642:8642"
+    volumes:
+      - ~/.hermes:/opt/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   gateway:
     image: ferdignatius/ai-wa-gateway:latest
     restart: unless-stopped
+    depends_on:
+      - hermes
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
     environment:
       HERMES_ENABLED: ${HERMES_ENABLED:-true}
-      HERMES_URL: ${HERMES_URL:-}
+      HERMES_URL: ${HERMES_URL:-http://hermes:8642/p/ferdinand_assistant/webhooks/wa-gateway}
       HERMES_TOKEN: ${HERMES_TOKEN:-}
       BACKEND_URL: ${BACKEND_URL:-}
       BACKEND_TOKEN: ${BACKEND_TOKEN:-}
